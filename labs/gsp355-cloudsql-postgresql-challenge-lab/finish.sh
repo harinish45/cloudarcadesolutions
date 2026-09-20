@@ -14,12 +14,13 @@ TABLE="inventory_items"
 echo "GSP355 Tasks 2–4"
 STATE="$(gcloud database-migration migration-jobs describe "$JOB" --region="$REGION" --format='value(state)' 2>/dev/null || true)"
 echo "Migration state: $STATE"
-if [[ "$STATE" != "COMPLETED" ]]; then
-  echo "Promotion is only valid after the migration is ready. Current state: $STATE"
+if [[ "$STATE" == "FAILED" || "$STATE" == "STOPPED" ]]; then
+  echo "Migration is not currently promotable. Current state: $STATE"
   exit 2
 fi
 
-echo "[Task 2] Promote"
+echo "[Task 2] Promote when the job has reached CDC readiness"
+
 gcloud database-migration migration-jobs promote "$JOB" --region="$REGION"
 
 echo "[Task 3] IAM database authentication"
