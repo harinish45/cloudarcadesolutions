@@ -1,22 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-
-PROJECT_ID="$(gcloud config get-value project 2>/dev/null || true)"
+PROJECT_ID="$(gcloud config get-value project 2>/dev/null)"
+REGION="us-central1"
+INSTANCE="postgres83-psvr9"
+JOB="gsp355-orders-migration"
 echo "Project: $PROJECT_ID"
-read -r -p "Cloud SQL instance name: " INSTANCE
-
-echo
-echo "== INSTANCE =="
-gcloud sql instances describe "$INSTANCE"   --format='yaml(name,state,databaseVersion,region,settings.tier)' || true
-
-echo
-echo "== DATABASES =="
-gcloud sql databases list --instance="$INSTANCE" --format='table(name)' || true
-
-echo
-echo "== USERS =="
-gcloud sql users list --instance="$INSTANCE" --format='table(name,type)' || true
-
-echo
-echo "== API =="
-gcloud services list --enabled   --filter='config.name:sqladmin.googleapis.com'   --format='value(config.name)' || true
+echo "== Cloud SQL =="
+gcloud sql instances describe "$INSTANCE" --format='yaml(name,state,databaseVersion,region,settings.backupConfiguration,settings.databaseFlags,settings.ipConfiguration.authorizedNetworks)' || true
+echo "== Migration job =="
+gcloud database-migration migration-jobs describe "$JOB" --region="$REGION" || true
+echo "== DMS profiles =="
+gcloud database-migration connection-profiles list --region="$REGION" || true
