@@ -86,7 +86,6 @@ GRANT ALL ON SCHEMA pglogical TO import_admin;
 GRANT SELECT ON ALL TABLES IN SCHEMA pglogical TO import_admin;
 SQL
 )
- '%s' "$REMOTE_SQL" | base64 -w0)"
 REMOTE_B64="$(printf '%s' "$REMOTE_SQL" | base64 -w0)"
 gcloud compute ssh "$SOURCE_VM" --zone="$ZONE" --command="echo '$REMOTE_B64' | base64 -d | sudo -u postgres psql -v ON_ERROR_STOP=1"
 
