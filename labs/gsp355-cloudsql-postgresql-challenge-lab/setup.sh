@@ -43,13 +43,14 @@ gcloud compute ssh "$SOURCE_VM" --zone="$ZONE" --command="sudo apt-get update -y
 gcloud compute ssh "$SOURCE_VM" --zone="$ZONE" --command="sudo -u postgres psql -v ON_ERROR_STOP=1 -c \"ALTER SYSTEM SET shared_preload_libraries = 'pglogical';\" -c \"ALTER SYSTEM SET wal_level = 'logical';\" -c \"ALTER SYSTEM SET max_replication_slots = '10';\" -c \"ALTER SYSTEM SET max_wal_senders = '10';\" -c \"ALTER SYSTEM SET max_worker_processes = '10';\""
 gcloud compute ssh "$SOURCE_VM" --zone="$ZONE" --command="sudo grep -q '^[[:space:]]*host[[:space:]]\+all[[:space:]]\+all[[:space:]]\+0.0.0.0/0' /etc/postgresql/14/main/pg_hba.conf || echo 'host all all 0.0.0.0/0 scram-sha-256' | sudo tee -a /etc/postgresql/14/main/pg_hba.conf >/dev/null; sudo systemctl restart postgresql"
 
-REMOTE_SQL='CREATE EXTENSION IF NOT EXISTS pglogical;
+REMOTE_SQL=$(cat <<'SQL'
+CREATE EXTENSION IF NOT EXISTS pglogical;
 DO $$
 BEGIN
- IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='''import_admin''') THEN
-   CREATE ROLE import_admin LOGIN PASSWORD '''__DMS_PASSWORD__''';
+ IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='import_admin') THEN
+   CREATE ROLE import_admin LOGIN PASSWORD '__DMS_PASSWORD__';
  ELSE
-   ALTER ROLE import_admin LOGIN PASSWORD '''__DMS_PASSWORD__''';
+   ALTER ROLE import_admin LOGIN PASSWORD '__DMS_PASSWORD__';
  END IF;
 END $$;
 ALTER ROLE import_admin WITH REPLICATION;
@@ -58,9 +59,9 @@ GRANT CONNECT, CREATE ON DATABASE orders TO import_admin;
 DO $$
 DECLARE t text;
 BEGIN
- FOREACH t IN ARRAY ARRAY['''distribution_centers''','''inventory_items''','''order_items''','''products''','''users'''] LOOP
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=format('''public.%s''',t)::regclass AND contype='''p''') THEN
-   EXECUTE format('''ALTER TABLE public.%I ADD PRIMARY KEY (id)''',t);
+ FOREACH t IN ARRAY ARRAY['distribution_centers','inventory_items','order_items','products','users'] LOOP
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid=format('public.%s',t)::regclass AND contype='p') THEN
+   EXECUTE format('ALTER TABLE public.%I ADD PRIMARY KEY (id)',t);
   END IF;
  END LOOP;
 END $$;
@@ -82,8 +83,10 @@ ALTER TABLE public.users OWNER TO import_admin;
 CREATE EXTENSION IF NOT EXISTS pglogical;
 GRANT USAGE ON SCHEMA pglogical TO import_admin;
 GRANT ALL ON SCHEMA pglogical TO import_admin;
-GRANT SELECT ON ALL TABLES IN SCHEMA pglogical TO import_admin;'
-REMOTE_SQL="${REMOTE_SQL//__DMS_PASSWORD__/$DMS_MIGRATION_PASSWORD}"
+GRANT SELECT ON ALL TABLES IN SCHEMA pglogical TO import_admin;
+SQL
+)
+ '%s' "$REMOTE_SQL" | base64 -w0)"
 REMOTE_B64="$(printf '%s' "$REMOTE_SQL" | base64 -w0)"
 gcloud compute ssh "$SOURCE_VM" --zone="$ZONE" --command="echo '$REMOTE_B64' | base64 -d | sudo -u postgres psql -v ON_ERROR_STOP=1"
 
